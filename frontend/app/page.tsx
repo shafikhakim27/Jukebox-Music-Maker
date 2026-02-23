@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 type Track = { id: number; title: string; artist: string; filename: string };
 type QueueItem = { id: number; position: number; added_by: string; track: Track };
@@ -19,33 +19,48 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const authHeaders = useMemo<Record<string, string>>(() => {
-    if (!token) {
-      return {};
-    }
-    return { Authorization: `Bearer ${token}` };
-  }, [token]);
+  const authToken = useMemo(() => (token ? `Bearer ${token}` : null), [token]);
   const currentTrack = useMemo(
     () => tracks.find((track) => track.id === playback.current_track_id),
     [tracks, playback.current_track_id],
   );
 
-  const refreshTracks = useCallback(async () => {
-    const res = await fetch(`${API}/tracks?q=${encodeURIComponent(search)}`);
-    setTracks(await res.json());
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTracks = async () => {
+      const res = await fetch(`${API}/tracks?q=${encodeURIComponent(search)}`);
+      const data = (await res.json()) as Track[];
+      if (!cancelled) {
+        setTracks(data);
+      }
+    };
+
+    void loadTracks();
+
+    return () => {
+      cancelled = true;
+    };
   }, [search]);
 
-  const refreshState = useCallback(async () => {
-    const res = await fetch(`${API}/queue`);
-    const data = await res.json();
-    setQueue(data.queue);
-    setPlayback(data.playback);
-  }, []);
-
   useEffect(() => {
-    refreshTracks();
-    refreshState();
-  }, [refreshTracks, refreshState]);
+    let cancelled = false;
+
+    const loadQueueState = async () => {
+      const res = await fetch(`${API}/queue`);
+      const data = (await res.json()) as { queue: QueueItem[]; playback: Playback };
+      if (!cancelled) {
+        setQueue(data.queue);
+        setPlayback(data.playback);
+      }
+    };
+
+    void loadQueueState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const ws = new WebSocket(API.replace('http', 'ws') + '/ws');
@@ -88,13 +103,18 @@ export default function Home() {
   const patchPlayback = async (patch: Partial<Playback>) => {
     await fetch(`${API}/playback`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      headers: authToken
+        ? { 'Content-Type': 'application/json', Authorization: authToken }
+        : { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
   };
 
   const addToQueue = async (trackId: number) => {
-    await fetch(`${API}/queue/${trackId}`, { method: 'POST', headers: authHeaders });
+    await fetch(`${API}/queue/${trackId}`, {
+      method: 'POST',
+      headers: authToken ? { Authorization: authToken } : {},
+    });
   };
 
   return (
