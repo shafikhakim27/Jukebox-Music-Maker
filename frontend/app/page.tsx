@@ -19,12 +19,7 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const authHeaders = useMemo<Record<string, string>>(() => {
-    if (!token) {
-      return {};
-    }
-    return { Authorization: `Bearer ${token}` };
-  }, [token]);
+  const authToken = useMemo(() => (token ? `Bearer ${token}` : null), [token]);
   const currentTrack = useMemo(
     () => tracks.find((track) => track.id === playback.current_track_id),
     [tracks, playback.current_track_id],
@@ -88,13 +83,18 @@ export default function Home() {
   const patchPlayback = async (patch: Partial<Playback>) => {
     await fetch(`${API}/playback`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      headers: authToken
+        ? { 'Content-Type': 'application/json', Authorization: authToken }
+        : { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
   };
 
   const addToQueue = async (trackId: number) => {
-    await fetch(`${API}/queue/${trackId}`, { method: 'POST', headers: authHeaders });
+    await fetch(`${API}/queue/${trackId}`, {
+      method: 'POST',
+      headers: authToken ? { Authorization: authToken } : {},
+    });
   };
 
   return (
