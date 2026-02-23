@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Track = { id: number; title: string; artist: string; filename: string };
 type QueueItem = { id: number; position: number; added_by: string; track: Track };
@@ -20,24 +20,27 @@ export default function Home() {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
-  const currentTrack = tracks.find((t) => t.id === playback.current_track_id);
+  const currentTrack = useMemo(
+    () => tracks.find((track) => track.id === playback.current_track_id),
+    [tracks, playback.current_track_id],
+  );
 
-  const refreshTracks = async () => {
+  const refreshTracks = useCallback(async () => {
     const res = await fetch(`${API}/tracks?q=${encodeURIComponent(search)}`);
     setTracks(await res.json());
-  };
+  }, [search]);
 
-  const refreshState = async () => {
+  const refreshState = useCallback(async () => {
     const res = await fetch(`${API}/queue`);
     const data = await res.json();
     setQueue(data.queue);
     setPlayback(data.playback);
-  };
+  }, []);
 
   useEffect(() => {
     refreshTracks();
     refreshState();
-  }, [search]);
+  }, [refreshTracks, refreshState]);
 
   useEffect(() => {
     const ws = new WebSocket(API.replace('http', 'ws') + '/ws');
@@ -57,9 +60,12 @@ export default function Home() {
     audio.src = `${API}/media/${currentTrack.filename}`;
     audio.currentTime = playback.position_seconds ?? 0;
     audio.volume = playback.volume;
-    if (playback.is_playing) audio.play().catch(() => undefined);
-    else audio.pause();
-  }, [currentTrack?.id, playback.is_playing]);
+    if (playback.is_playing) {
+      audio.play().catch(() => undefined);
+      return;
+    }
+    audio.pause();
+  }, [currentTrack, playback.is_playing, playback.position_seconds, playback.volume]);
 
   const login = async (e: FormEvent) => {
     e.preventDefault();
@@ -103,10 +109,10 @@ export default function Home() {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" className="ml-auto" />
           </div>
           <ul className="space-y-2">
-            {tracks.map((t) => (
-              <li key={t.id} className="flex items-center justify-between rounded border border-zinc-800 p-2">
-                <span>{t.title} — {t.artist}</span>
-                <button onClick={() => addToQueue(t.id)} className="bg-emerald-700">Queue</button>
+            {tracks.map((track) => (
+              <li key={track.id} className="flex items-center justify-between rounded border border-zinc-800 p-2">
+                <span>{track.title} — {track.artist}</span>
+                <button onClick={() => addToQueue(track.id)} className="bg-emerald-700">Queue</button>
               </li>
             ))}
           </ul>
