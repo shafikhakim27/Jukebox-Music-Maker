@@ -19,10 +19,12 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const authHeaders = useMemo<Record<string, string>>(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token],
-  );
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    if (!token) {
+      return {};
+    }
+    return { Authorization: `Bearer ${token}` };
+  }, [token]);
   const currentTrack = useMemo(
     () => tracks.find((track) => track.id === playback.current_track_id),
     [tracks, playback.current_track_id],
