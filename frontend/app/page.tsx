@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 type Track = { id: number; title: string; artist: string; filename: string };
 type QueueItem = { id: number; position: number; added_by: string; track: Track };
@@ -25,22 +25,42 @@ export default function Home() {
     [tracks, playback.current_track_id],
   );
 
-  const refreshTracks = useCallback(async () => {
-    const res = await fetch(`${API}/tracks?q=${encodeURIComponent(search)}`);
-    setTracks(await res.json());
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTracks = async () => {
+      const res = await fetch(`${API}/tracks?q=${encodeURIComponent(search)}`);
+      const data = (await res.json()) as Track[];
+      if (!cancelled) {
+        setTracks(data);
+      }
+    };
+
+    void loadTracks();
+
+    return () => {
+      cancelled = true;
+    };
   }, [search]);
 
-  const refreshState = useCallback(async () => {
-    const res = await fetch(`${API}/queue`);
-    const data = await res.json();
-    setQueue(data.queue);
-    setPlayback(data.playback);
-  }, []);
-
   useEffect(() => {
-    refreshTracks();
-    refreshState();
-  }, [refreshTracks, refreshState]);
+    let cancelled = false;
+
+    const loadQueueState = async () => {
+      const res = await fetch(`${API}/queue`);
+      const data = (await res.json()) as { queue: QueueItem[]; playback: Playback };
+      if (!cancelled) {
+        setQueue(data.queue);
+        setPlayback(data.playback);
+      }
+    };
+
+    void loadQueueState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const ws = new WebSocket(API.replace('http', 'ws') + '/ws');
